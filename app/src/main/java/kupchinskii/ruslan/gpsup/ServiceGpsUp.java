@@ -1,5 +1,6 @@
 package kupchinskii.ruslan.gpsup;
 
+import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -16,6 +17,8 @@ import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationManagerCompat;
 
 import java.io.UnsupportedEncodingException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Timer;
@@ -26,19 +29,21 @@ public class ServiceGpsUp extends Service {
     static private Timer mTimer;
     static private MyTimerTask mMyTimerTask;
     final Intent intentBroadcast = new Intent(Common.BROADCAST_ACTION);
-    widgetPref.en_w_mode Mode;
+
     BroadcastReceiver br;
 
     public void onCreate() {
 
         InitBroadcastReceiver();
 
+
         Common.notify(getApplicationContext()
                 ,"sat : 0 / 0"
                 ,""
                 ,false
         );
-        if (Build.VERSION.SDK_INT < 11){
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB){
            NotificationCompat.Builder mBuilder =
                     new NotificationCompat.Builder(this)
                             .setSmallIcon(R.drawable.ic_notify_proc)
@@ -53,29 +58,21 @@ public class ServiceGpsUp extends Service {
                     0, new Intent(getApplicationContext(), MainActivity.class)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), 0);
             startForeground(Common.NOTIFY_ID, notification);
-
-
-
         }
-        else {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
             Notification.Builder builder = new Notification.Builder(this)
                     .setSmallIcon(R.drawable.ic_notify_proc)
                     .setContentTitle("GPS Up")
                     .setContentText("Service create")
                     .setOnlyAlertOnce(true)
-                    .setOngoing(true);
+                    .setOngoing(true)
+                    ;
             Notification notification;
-            if (Build.VERSION.SDK_INT < 16)
-                notification = builder.getNotification();
-            else
-                notification = builder.build();
+
+             notification = builder.build();
 
             startForeground(Common.NOTIFY_ID, notification);
         }
-
-
-
-       // broadcastMsg("Service create", false);
     }
 
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -90,25 +87,9 @@ public class ServiceGpsUp extends Service {
             mMyTimerTask = null;
         }
 
-        try {
-            Mode = widgetPref.en_w_mode.fromInteger(intent.getIntExtra(Common.PARM_SERVICE_MODE, -1100));
-        }
-        catch (Exception ex){
-            Mode = widgetPref.en_w_mode.no_close;
-        }
-
-        String appS = intent.getStringExtra(Common.PARM_SERVICE_START);
-
         mTimer = new Timer();
-        mMyTimerTask = new MyTimerTask(Mode, appS);
+        mMyTimerTask = new MyTimerTask();
         mTimer.schedule(mMyTimerTask, 1000, Common.CONST_TIMER_INTERVAL);
-
-        if (appS != null){
-            Common.start(getApplicationContext(), appS);
-        }
-
-
-   //     broadcastMsg("Service started",false);
 
         return super.onStartCommand(intent, flags, startId);
     }
@@ -163,14 +144,12 @@ public class ServiceGpsUp extends Service {
     public class MyTimerTask extends TimerTask {
 
         GPS g;
-        widgetPref.en_w_mode Mode;
-        String Pkg;
-        boolean isOthAppStarted = false;
         int cntUp = 0;
+        GPS_Result gps;
 
-        public MyTimerTask(widgetPref.en_w_mode mode, String pkg) {
-            Mode = mode;
-            Pkg = pkg;
+    public MyTimerTask() {
+
+            dateFormat = android.text.format.DateFormat.getDateFormat(getApplicationContext());
 
             g = new GPS(getApplicationContext());
         }
@@ -178,30 +157,16 @@ public class ServiceGpsUp extends Service {
         @Override
         public void run() {
 
-            GPS_Result gps = g.getResult();
+             gps = g.getResult();
 
-            if(Mode == widgetPref.en_w_mode.close_on_app){
-                if(!isOthAppStarted)
-                    isOthAppStarted = Common.isForeground(getApplicationContext(), Pkg);
 
-                if(isOthAppStarted && !Common.isForeground(getApplicationContext(), Pkg) ){
-                    broadcastStop();
-                }
-            }
-            else if (Mode == widgetPref.en_w_mode.close_on_up){
-                if(!isOthAppStarted)
-                    isOthAppStarted = Common.isForeground(getApplicationContext(), Pkg);
-
-                if (isOthAppStarted && gps.accuracy > 0 && gps.accuracy < 50 && cntUp < 10){
+                if (gps.accuracy > 0 && gps.accuracy < 50 && cntUp < 10){
                     cntUp++;
                 }
+
                 if (cntUp == 20 ){
                     broadcastStop();
                 }
-
-            }
-
-
 
             broadcastMsg(GetFormatInfo(gps), true);
         }
@@ -218,18 +183,27 @@ public class ServiceGpsUp extends Service {
     int linePos = 0;
     boolean isBack = false;
 
-        private String GetFormatInfo(GPS_Result val){
-            StringBuilder s = new StringBuilder();
+    DateFormat dateFormat;
+    SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
+    StringBuilder s;
 
-            if(val.status != Common.STATUS_DISABLE) {
-                s.append(String.format("spd : %s\n+/- : %s\nlat : %s\nlon : %s ", val.speed, val.accuracy, val.latitude, val.longitude));
+    private String GetFormatInfo(GPS_Result val){
+        s = new StringBuilder();
+
+
+            if (val.status != Common.STATUS_DISABLE) {
+                addTyStr(s, String.format("spd : %s\n+/- : %s\nlat : %s\nlon : %s ", val.speed, val.accuracy, val.latitude, val.longitude));
+
+                if (val.time > 0)
+                    addTyStr(s, String.format("\ngps time : %s", dateFormat.format(val.time) + " " + timeFormat.format(val.time)));
             }
 
-            s.append(String.format("\nsat : %s / %s", val.satAct, val.satCnt));
+
+        addTyStr(s,String.format("\nsat : %s / %s", val.satAct, val.satCnt));
 
             if(val.satAct ==0 && val.satCnt == 0){
                 if(val.satTotal > 0)
-                    s.append("\nAGPS : ok");
+                    addTyStr(s,"\nAGPS : ok");
 
                 if(isBack)
                     linePos -- ;
@@ -245,7 +219,7 @@ public class ServiceGpsUp extends Service {
                     linePos = 0;
                 }
 
-                s.append( String.format("\n%s%s", Common.getStringWithLengthAndFilledWithCharacter(linePos, ' ' ), '▓' ));
+                addTyStr(s, String.format("\n%s%s", Common.getStringWithLengthAndFilledWithCharacter(linePos, ' ' ), '▓' ));
 
             }
 
@@ -280,8 +254,10 @@ public class ServiceGpsUp extends Service {
             for(int i= 0 ; i < val.satCnt; i++)
                 s.append(GetSatInfo (val.SInfo[i].num, val.SInfo[i].isFix, val.SInfo[i].snr ));
 
+            String res = s.toString();
+            s = null;
 
-            return  s.toString();
+            return  res;
 
         }
 
@@ -300,7 +276,10 @@ public class ServiceGpsUp extends Service {
             if (length > 0) {
                 char[] array = new char[length];
                 Arrays.fill(array, charToFill);
-                return new String(array);
+                String res = new String(array);
+                array = null;
+
+                return res;
             }
             return "";
         }
@@ -311,6 +290,12 @@ public class ServiceGpsUp extends Service {
             ;
 
             sendBroadcast(intentBroadcast);
+        }
+
+        private void addTyStr(StringBuilder sb, String s){
+            try {
+                sb.append(s);
+            }catch (Exception e){}
         }
     }
 

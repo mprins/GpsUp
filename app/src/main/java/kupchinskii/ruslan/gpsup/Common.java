@@ -119,6 +119,12 @@ public class Common {
     private static String _title;
     private static String _msg;
     private static boolean _isUp;
+
+    final static Intent intentBroadcast = new Intent(Common.BROADCAST_ACTION);
+    static PendingIntent pIntent = null;//PendingIntent.getBroadcast(context, Common.BROADCAST_STOP, intentBroadcast, PendingIntent.FLAG_UPDATE_CURRENT);
+
+    static PendingIntent pi;
+
     public static  void notify(Context context, String title,  String msg, boolean isUp){
 
         if(title.equals(_title)  && msg.equals(_msg) && isUp == _isUp)
@@ -128,11 +134,17 @@ public class Common {
         _msg = msg;
         _isUp = isUp;
 
-        Intent activityIntent = new Intent(context, MainActivity.class);
-        activityIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(context, 0, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        intentBroadcast.putExtra(Common.BROADCAST_TYPE, Common.BROADCAST_STOP);
+
+        if (pIntent == null)
+            pIntent = PendingIntent.getBroadcast(context, Common.BROADCAST_STOP, intentBroadcast, PendingIntent.FLAG_UPDATE_CURRENT);
 
 
+        if (pi == null) {
+            Intent activityIntent = new Intent(context, MainActivity.class);
+            activityIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            pi = PendingIntent.getActivity(context, 0, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        }
 
         if (Build.VERSION.SDK_INT < 11){
             NotificationCompat.Builder mBuilder =
@@ -144,6 +156,7 @@ public class Common {
                             .setContentText(msg)
                             .setOnlyAlertOnce(true)
                             .setOngoing(true)
+                            .addAction(R.drawable.close_icon, "Exit", pIntent)
                     ;
 
             NotificationManager mNotificationManager =
@@ -161,15 +174,16 @@ public class Common {
                     .setContentIntent(pi)
                     .setContentText(msg)
                     .setOnlyAlertOnce(true)
+
                     .setOngoing(true);
 
-            if (Build.VERSION.SDK_INT < 16)
-                notification = builder.getNotification();
-            else
-                notification = builder.build();
+            if (Build.VERSION.SDK_INT >= 16)
+                builder.addAction(R.drawable.close_icon, "Exit", pIntent);
 
-            NotificationManagerCompat notificationManager = NotificationManagerCompat.from(context);
-            notificationManager.notify(NOTIFY_ID, notification);
+             notification = builder.build();
+
+             NotificationManagerCompat notificationManager = NotificationManagerCompat.from(context);
+             notificationManager.notify(NOTIFY_ID, notification);
         }
 
     }
@@ -178,33 +192,6 @@ public class Common {
         return  _LargeIcon != null
                     ? _LargeIcon
                     :(_LargeIcon =  (((BitmapDrawable) context.getResources().getDrawable(R.drawable.ic_launcher)).getBitmap()));
-    }
-
-
-    public static void logInFile(String tag, String msg)
-    {
-
-        try {
-            File file = new File(Environment.getExternalStorageDirectory().toString() + "/" +
-                    "gpsUp.log");
-            if (!file.exists()) {
-                file.createNewFile();
-            }
-
-            String timeLog = new SimpleDateFormat("yyyy.MM.dd hh:mm:ss").format(new Date());
-            Log.d(tag, timeLog +"\t" + tag + "\t" + msg + "\n");
-            BufferedWriter bw = new BufferedWriter(new FileWriter(file, true));
-            bw.append( timeLog +"\t" + tag + "\t" + msg + "\n");
-            bw.close();
-
-        } catch (Exception e) {
-            Log.d("", e.getMessage());
-        }
-
-    }
-    public static void logInFile(String tag, Exception ex)
-    {
-        logInFile(tag, ex.getStackTrace().toString());
     }
 
     public static String getStringWithLengthAndFilledWithCharacter(int length, char charToFill) {

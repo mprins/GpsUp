@@ -8,11 +8,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.support.v4.app.ActivityCompat;
 
 import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 public class MainActivity extends Activity {
 
@@ -36,15 +38,12 @@ public class MainActivity extends Activity {
         }
 
         tvInfo = (TextView) findViewById(R.id.tvInfo);
+        tvInfo.setTypeface(Typeface.createFromAsset(getAssets(), "fonts/Terminus.otf"), Typeface.NORMAL);
 
         if (checkLocationPermission())
             run();
         else
             ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
-
-        tvInfo.setTypeface(Typeface.createFromAsset(getAssets(), "fonts/Terminus.ttf") , Typeface.NORMAL );
-
-
     }
 
     private void run(){
@@ -58,6 +57,8 @@ public class MainActivity extends Activity {
             case 1: {
                 if (grantResults.length > 0&& grantResults[0] == PackageManager.PERMISSION_GRANTED)
                     run();
+                else
+                    finish();
                 return;
             }
         }
@@ -73,7 +74,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        unregisterReceiver(br);
+        if(br != null)
+            unregisterReceiver(br);
     }
 
     @Override
@@ -105,10 +107,12 @@ public class MainActivity extends Activity {
             public void onReceive(Context context, Intent intent) {
                 int type = intent.getIntExtra(Common.BROADCAST_TYPE, -1);
                 if(type == Common.BROADCAST_INFO){
-                    String info = intent.getStringExtra(Common.BROADCAST_VALUE);
                     isPowerOn = intent.getBooleanExtra(Common.BROADCAST_VALUE_STATE, false);
-                    tvInfo.setText(info);
+                    tvInfo.setText(intent.getStringExtra(Common.BROADCAST_VALUE));
                 }
+                else if (type == Common.BROADCAST_STOP)
+                    onClickPower(null);
+
             }
         };
         IntentFilter intFilt = new IntentFilter(Common.BROADCAST_ACTION);
@@ -131,6 +135,21 @@ public class MainActivity extends Activity {
     }
     public void onClickExit(View v) {
         finish();
+    }
+
+    public void onSendGeo(View v) {
+
+
+        if (GPS.latitude > 0 && GPS.longitude > 0) {
+
+            String shareBody = (GPS.latitude > 0  ? "N" : "S") + Math.abs(GPS.latitude) + " " + (GPS.longitude > 0  ? "E" : "W") + Math.abs(GPS.longitude) ;
+            Intent sharingIntent = new Intent(android.content.Intent.ACTION_SEND);
+            sharingIntent.setType("text/plain");
+            sharingIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, "Subject Here");
+            sharingIntent.putExtra(android.content.Intent.EXTRA_TEXT, shareBody);
+            startActivity(Intent.createChooser(sharingIntent, "share location"));
+        }
+
     }
 
     public void onClickAGPS(View v) {
